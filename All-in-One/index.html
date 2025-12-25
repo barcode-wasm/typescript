@@ -1,0 +1,1207 @@
+<!--
+================================================================================
+Barcode.WASM デモアプリケーション - HTML/UI定義
+================================================================================
+
+このファイルは、Barcode.WASM ライブラリのデモ・サンプルプログラムのUI定義です。
+Vite + TypeScript環境で動作し、main.tsと連携してバーコードを生成します。
+
+【対応バーコード】
+- 1次元バーコード: CODE39, CODE93, CODE128, GS1-128, NW-7, JAN, UPC, GS1 DataBar等
+- 2次元バーコード: QR, DataMatrix, PDF417
+
+【出力形式】
+- PNG: ラスター画像形式
+- SVG: ベクター画像形式（印刷・拡大に最適）
+
+【出力先】
+- ブラウザ表示（直接表示）
+- PDF出力（jsPDFを使用）
+
+@version 1.0.0
+@see main.ts - バーコード生成ロジック
+================================================================================
+-->
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webassembly (WASM) で バーコード生成</title>
+    <!-- 
+    ========================================
+    スタイル定義
+    ========================================
+    -->
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+
+        .main-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            border-bottom: 3px solid #eee;
+        }
+
+        .main-tab {
+            padding: 15px 30px;
+            cursor: pointer;
+            background: #f5f5f5;
+            border: none;
+            border-radius: 8px 8px 0 0;
+            font-size: 18px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        .main-tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .main-tab-content {
+            display: none;
+        }
+
+        .main-tab-content.active {
+            display: block;
+        }
+
+
+        .form-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .form-row {
+            display: grid;
+            gap: 15px;
+        }
+
+        .form-row.single {
+            grid-template-columns: 1fr;
+        }
+
+        .form-row.double {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .form-row.triple {
+            grid-template-columns: 1fr 1fr 1fr;
+        }
+
+        .form-row.full-width {
+            grid-template-columns: 1fr;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group.inline {
+            flex-direction: row;
+            align-items: center;
+            gap: 10px;
+        }
+
+        label {
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #555;
+            font-size: 0.95em;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        select {
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: all 0.3s;
+        }
+
+        input[type="text"]:focus,
+        input[type="number"]:focus,
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .color-input-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        input[type="color"] {
+            width: 60px;
+            height: 40px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        button.generate-btn {
+            grid-column: 1 / -1;
+            padding: 16px 32px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-top: 10px;
+        }
+
+        button.generate-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        button.generate-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        /* #result直下の画像のみ（キャンバス配置方式以外用） */
+        #result > img {
+            max-width: 100%;
+            height: auto;
+        }
+
+        #result {
+            margin-top: 40px;
+            text-align: center;
+            padding: 30px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            min-height: 250px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .loading {
+            color: #667eea;
+            font-size: 1.2em;
+        }
+
+        .error {
+            color: #e74c3c;
+            font-size: 1.1em;
+            padding: 20px;
+            background: #ffe5e5;
+            border-radius: 8px;
+        }
+
+        .specific-props {
+            margin-top: 20px;
+            padding: 20px;
+            background: #fff3cd;
+            border-radius: 8px;
+            border-left: 4px solid #ffc107;
+        }
+
+        .specific-props h3 {
+            margin-bottom: 15px;
+            color: #856404;
+        }
+
+        /* 出力形式選択のスタイル */
+        .output-format-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-items: center;
+            padding: 15px 20px;
+            background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+            border-radius: 8px;
+            border-left: 4px solid #4caf50;
+            margin-bottom: 20px;
+        }
+
+        .output-format-group .format-label {
+            font-weight: 600;
+            color: #2e7d32;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .output-format-group .radio-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            padding: 8px 16px;
+            border-radius: 20px;
+            background: white;
+            transition: all 0.2s;
+            margin: 0;
+        }
+
+        .output-format-group .radio-option:hover {
+            background: #f1f8e9;
+        }
+
+        .output-format-group .radio-option input[type="radio"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .output-format-group .format-hint {
+            font-size: 0.85em;
+            color: #558b2f;
+            margin-left: auto;
+        }
+
+        /* SVGコンテナのスタイル */
+        #result .svg-container,
+        #result2d .svg-container {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            border: 2px solid #4caf50;
+            display: inline-block;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+            h1 {
+                font-size: 2em;
+            }
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* 制御文字UIのスタイル */
+        .control-char-ui {
+            background: #f8f9ff;
+            padding: 10px 15px;
+            border-radius: 6px;
+            border-left: 3px solid #667eea;
+            margin-bottom: 15px;
+            animation: slideDown 0.3s ease;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* 生成ボタン行（ボタン＋出力先選択） */
+        .generate-row {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+
+        .generate-row .generate-btn {
+            margin-top: 0;
+            flex-shrink: 0;
+        }
+
+        /* 出力先選択（Browser/PDF） */
+        .output-mode-selector {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 16px;
+            background: #f0f4ff;
+            border-radius: 8px;
+            border: 1px solid #d0d8f0;
+        }
+
+        .output-mode-label {
+            font-weight: 600;
+            color: #4a5568;
+            font-size: 0.9em;
+        }
+
+        .output-mode-option {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            padding: 4px 10px;
+            border-radius: 4px;
+            transition: all 0.2s;
+            margin: 0;
+        }
+
+        .output-mode-option:hover {
+            background: #e2e8f0;
+        }
+
+        .output-mode-option input[type="radio"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+
+        .output-mode-option span {
+            font-size: 0.9em;
+            color: #4a5568;
+        }
+
+        /* PDF表示用iframe */
+        #result iframe {
+            width: 100%;
+            height: 500px;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+        }
+
+        /* ========== コンパクトレイアウト ========== */
+        .compact-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px 20px;
+            align-items: center;
+        }
+        .compact-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .compact-item label {
+            margin: 0;
+            font-size: 0.85em;
+            white-space: nowrap;
+        }
+        .compact-item input[type="number"] {
+            width: 70px;
+            padding: 6px 8px;
+            font-size: 0.9em;
+        }
+        .compact-item input[type="number"].wide {
+            width: 90px;
+        }
+        .compact-item .color-input-group {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+        }
+        .compact-item .color-input-group input[type="color"] {
+            width: 28px;
+            height: 28px;
+            padding: 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .compact-item .color-input-group input[type="text"] {
+            width: 70px;
+            padding: 4px 6px;
+            font-size: 0.8em;
+        }
+        .compact-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.85em;
+        }
+        .compact-checkbox input[type="checkbox"] {
+            width: 15px;
+            height: 15px;
+        }
+        .compact-checkbox label {
+            margin: 0;
+            font-weight: normal;
+            font-size: 0.85em;
+        }
+        .form-section {
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        /* ========== 回転選択 ========== */
+        .generate-row .rotate-select {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .generate-row .rotate-select label {
+            margin: 0;
+            font-size: 0.9em;
+        }
+        .generate-row .rotate-select select {
+            padding: 6px 10px;
+            font-size: 0.9em;
+        }
+
+        /* ========== キャンバス表示エリア ========== */
+        .canvas-container {
+            width: 100%;
+            max-width: 1200px;
+            height: 600px;
+            background: white;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            position: relative;
+            overflow: auto;
+            margin: 0 auto;
+        }
+        .canvas-inner {
+            width: 1200px;
+            height: 1000px;
+            position: relative;
+            background: white;
+        }
+        .barcode-element {
+            position: absolute;
+            transform-origin: left bottom;
+        }
+        .barcode-element img,
+        .barcode-element svg {
+            display: block;
+            border: none !important;
+            box-shadow: none !important;
+            outline: none !important;
+            border-radius: 0 !important;
+            padding: 0 !important;
+        }
+        /* ツールバー（キャンバス上部） */
+        .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+            padding: 10px 15px;
+            background: #f0f0f0;
+            border-radius: 8px;
+            flex-wrap: wrap;
+            max-width: 1200px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .format-label {
+            font-weight: bold;
+            font-size: 0.95em;
+        }
+        .format-label.svg { color: #4caf50; }
+        .format-label.png { color: #2196F3; }
+        .info-text {
+            font-size: 0.85em;
+            color: #666;
+            margin-left: auto;
+            font-family: monospace;
+        }
+        /* アクションバー（下部ボタン群） */
+        .action-bar {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            max-width: 1200px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .action-btn {
+            display: inline-block;
+            padding: 10px 20px;
+            color: white;
+            text-decoration: none;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 0.95em;
+            cursor: pointer;
+        }
+        .action-btn:hover {
+            opacity: 0.9;
+        }
+        .action-btn.download { background: #28a745; }
+        .action-btn.open-tab { background: #667eea; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔲 Barcode.WASM デモ</h1>
+        <p class="subtitle">Webassembly(WASM)で高精度バーコードを生成 - PNG/SVG出力対応</p>
+
+        <!-- ★ 出力フォーマット選択（PNG/SVG）★ -->
+        <div class="output-format-group">
+            <label class="format-label">🖼️ 出力形式:</label>
+            <label class="radio-option">
+                <input type="radio" name="outputFormat" value="png" checked>
+                <span>PNG画像（ラスター）</span>
+            </label>
+            <label class="radio-option">
+                <input type="radio" name="outputFormat" value="svg">
+                <span>SVGベクター（拡大劣化なし）</span>
+            </label>
+            <span class="format-hint">※SVGは印刷・拡大に最適</span>
+        </div>
+
+        <div class="main-tabs">
+            <button class="main-tab active" onclick="switchMainTab('1d')">1次元バーコード</button>
+            <button class="main-tab" onclick="switchMainTab('2d')">2次元バーコード</button>
+            <button class="main-tab" onclick="switchMainTab('special')">特殊バーコード</button>
+        </div>
+
+        <!-- ========== 1次元バーコード ========== -->
+        <div id="1d-content" class="main-tab-content active">
+            <div class="form-grid">
+                <!-- 行1: バーコード種類 -->
+                <div class="form-row single">
+                    <div class="form-group">
+                        <label for="barcode1dType">バーコード種類 *</label>
+                        <select id="barcode1dType" onchange="update1DProps()">
+                            <option value="Code39">CODE 39</option>
+                            <option value="Code93">CODE 93</option>
+                            <option value="Code128">CODE 128</option>
+                            <option value="GS1_128">GS1-128</option>
+                            <option value="NW7">NW-7 (Codabar)</option>
+                            <option value="Matrix2of5">Matrix 2 of 5</option>
+                            <option value="NEC2of5">NEC 2 of 5</option>
+                            <option value="Jan8">JAN-8</option>
+                            <option value="Jan13">JAN-13</option>
+                            <option value="UPC_A">UPC-A</option>
+                            <option value="UPC_E">UPC-E</option>
+                            <option value="GS1DataBar14">GS1 DataBar 標準型</option>
+                            <option value="GS1DataBarLimited">GS1 DataBar 限定型</option>
+                            <option value="GS1DataBarExpanded">GS1 DataBar 拡張型</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 行2: ヒント + データ入力 -->
+                <div class="form-row full-width">
+                    <div class="form-group">
+                        <label for="data1d">バーコードデータ *</label>
+                        <div id="barcodeHint" style="font-size: 0.85em; color: #666; margin-bottom: 5px; padding: 8px 12px; background: #f0f8ff; border-left: 4px solid #4a90e2; border-radius: 4px;">
+                            半角英数字・記号を入力してください
+                        </div>
+                        <input type="text" id="data1d" placeholder="例: 1234567890" value="HELLO123">
+                    </div>
+                </div>
+
+                <!-- 制御文字入力UI（CODE128選択時のみ表示） -->
+                <div id="controlCharUI" class="control-char-ui" style="display: none;">
+                    <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px;">
+                        <select id="controlCharSelect" style="width: 300px; padding: 8px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 0.9em;">
+                            <option value="">制御文字を挿入...</option>
+                            <optgroup label="よく使う">
+                                <option value="{CR}">CR (0x0D) - 復帰</option>
+                                <option value="{LF}">LF (0x0A) - 改行</option>
+                                <option value="{HT}">HT (0x09) - 水平タブ</option>
+                                <option value="{ESC}">ESC (0x1B) - エスケープ</option>
+                                <option value="{STX}">STX (0x02) - テキスト開始</option>
+                                <option value="{ETX}">ETX (0x03) - テキスト終了</option>
+                            </optgroup>
+                            <optgroup label="その他">
+                                <option value="{NUL}">NUL (0x00) - null文字</option>
+                                <option value="{SOH}">SOH (0x01) - ヘッダ開始</option>
+                                <option value="{EOT}">EOT (0x04) - 転送終了</option>
+                                <option value="{ENQ}">ENQ (0x05) - 照会</option>
+                                <option value="{ACK}">ACK (0x06) - 受信OK</option>
+                                <option value="{BEL}">BEL (0x07) - 警告</option>
+                                <option value="{BS}">BS (0x08) - 後退</option>
+                                <option value="{VT}">VT (0x0B) - 垂直タブ</option>
+                                <option value="{FF}">FF (0x0C) - 改頁</option>
+                                <option value="{SO}">SO (0x0E) - シフトアウト</option>
+                                <option value="{SI}">SI (0x0F) - シフトイン</option>
+                                <option value="{DLE}">DLE (0x10) - データリンクエスケープ</option>
+                                <option value="{DC1}">DC1 (0x11) - 装置制御1</option>
+                                <option value="{DC2}">DC2 (0x12) - 装置制御2</option>
+                                <option value="{DC3}">DC3 (0x13) - 装置制御3</option>
+                                <option value="{DC4}">DC4 (0x14) - 装置制御4</option>
+                                <option value="{NAK}">NAK (0x15) - 受信失敗</option>
+                                <option value="{SYN}">SYN (0x16) - 同期</option>
+                                <option value="{ETB}">ETB (0x17) - 転送ブロック終了</option>
+                                <option value="{CAN}">CAN (0x18) - とりけし</option>
+                                <option value="{EM}">EM (0x19) - メディア終了</option>
+                                <option value="{SUB}">SUB (0x1A) - 置換</option>
+                                <option value="{FS}">FS (0x1C) - フォーム区切り</option>
+                                <option value="{GS}">GS (0x1D) - グループ区切り</option>
+                                <option value="{RS}">RS (0x1E) - レコード区切り</option>
+                                <option value="{US}">US (0x1F) - ユニット区切り</option>
+                            </optgroup>
+                        </select>
+                        <button type="button" onclick="insertControlChar()" 
+                                style="padding: 8px 20px; background: #667eea; color: white; 
+                                       border: none; border-radius: 6px; cursor: pointer; 
+                                       font-size: 0.9em; font-weight: 600; transition: background 0.2s; white-space: nowrap;"
+                                onmouseover="this.style.background='#5568d3'"
+                                onmouseout="this.style.background='#667eea'">
+                            ⬆ 挿入
+                        </button>
+                    </div>
+                </div>
+
+                <!-- GS1入力補助UI（GS1系選択時のみ表示） -->
+                <!-- GS1入力補助UI（GS1系バーコード選択時のみ表示） -->
+                <div id="gs1AssistUI" class="control-char-ui" style="display: none;">
+                    <div style="display: flex; justify-content: flex-end; align-items: center;">
+                        <!-- GS1-128専用パターン -->
+                        <select id="gs1PatternSelect_GS1_128" class="gs1-pattern-select" onchange="applyGS1Pattern()" style="width: 100%; max-width: 600px; padding: 8px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 0.9em; display: none;">
+                            <option value="">GS1-128 データパターン入力補助...</option>
+                            <optgroup label="基本パターン">
+                                <option value="{FNC1}0100012345678905{AI}10ABC123">{FNC1}(01)商品識別 + {AI}(10)バッチ: (01)00012345678905(10)ABC123</option>
+                                <option value="{FNC1}0100012345678905{FNC1}17251231">{FNC1}(01)商品識別 + {FNC1}(17)有効期限: (01)00012345678905(17)251231</option>
+                                <option value="{FNC1}0100012345678905{FNC1}21SERIAL123">{FNC1}(01)商品識別 + {FNC1}(21)シリアル: (01)00012345678905(21)SERIAL123</option>
+                                <option value="{FNC1}01000123456789051511250031001234">{FNC1}(01)商品識別 + (15)期限 + (30)数量: (01)00012345678905(15)112500(30)001234</option>
+                            </optgroup>
+                            <optgroup label="計量商品（重量・価格）">
+                                <option value="{FNC1}01900123456789083103001750">{FNC1}(01) + (3103)重量kg(0.001): (01)90012345678908(3103)001750</option>
+                                <option value="{FNC1}01900123456789083202000156">{FNC1}(01) + (3202)重量lb(0.01): (01)90012345678908(3202)000156</option>
+                                <option value="{FNC1}01900123456789083203022767">{FNC1}(01) + (3203)重量lb(0.001): (01)90012345678908(3203)022767</option>
+                                <option value="{FNC1}0190012345678908392207950">{FNC1}(01) + (3922)価格: (01)90012345678908(3922)07950</option>
+                            </optgroup>
+                            <optgroup label="計量商品+日付">
+                                <option value="{FNC1}0190012345678908310301223311991231">{FNC1}(01) + (3103)重量 + (11)製造年月日</option>
+                                <option value="{FNC1}0190012345678908310301223313991231">{FNC1}(01) + (3103)重量 + (13)包装年月日</option>
+                                <option value="{FNC1}0190012345678908310301223315991231">{FNC1}(01) + (3103)重量 + (15)品質保持期限</option>
+                                <option value="{FNC1}0190012345678908310301223317991231">{FNC1}(01) + (3103)重量 + (17)有効期限</option>
+                            </optgroup>
+                        </select>
+
+                        <!-- コンビニ標準料金代理収納用バーコード専用 -->
+                        <select id="gs1PatternSelect_ConvenienceStore" class="gs1-pattern-select" onchange="applyGS1Pattern()" style="width: 100%; max-width: 600px; padding: 8px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 0.9em; display: none;">
+                            <option value="">コンビニバーコード サンプルコード...</option>
+                            <optgroup label="料金収納（91: 標準料金代理収納）">
+                                <option value="{FNC1}9191234500000000000000452087500401310029500">電気料金例: 91-91234500000000000000452087500401310029500</option>
+                                <option value="{FNC1}9100000000000000000000100000000000000000001">最小例: 91-0...0-100円-0...0-1</option>
+                            </optgroup>
+                            <optgroup label="払込票（91: EAN-128払込票）">
+                                <option value="{FNC1}9112345678901234567890123456789012345678901">払込票例1: 91-123456789012345678901234567890123456789-01</option>
+                                <option value="{FNC1}9198765432109876543210987654321098765432100">払込票例2: 91-987654321098765432109876543210987654321-00</option>
+                            </optgroup>
+                        </select>
+
+                        <!-- GS1-DataBar標準型専用（14桁GTINのみ、{FNC1}/{AI}なし） -->
+                        <select id="gs1PatternSelect_GS1DataBar14" class="gs1-pattern-select" onchange="applyGS1Pattern()" style="width: 100%; max-width: 600px; padding: 8px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 0.9em; display: none;">
+                            <option value="">GS1 DataBar 標準型 サンプルコード...</option>
+                            <option value="12345678">GTIN-8例: 12345678 (8桁)</option>
+                            <option value="123456789012">GTIN-12例: 123456789012 (12桁、UPC-A)</option>
+                            <option value="1234567890128">GTIN-13例1: 1234567890128 (13桁、EAN-13)</option>
+                            <option value="4912345678904">GTIN-13例2: 4912345678904 (13桁、JAN-13)</option>
+                            <option value="614141123452">短縮例: 614141123452 (12桁)</option>
+                        </select>
+
+                        <!-- GS1-DataBar限定型専用（14桁GTIN、先頭0/1のみ、{FNC1}/{AI}なし） -->
+                        <select id="gs1PatternSelect_GS1DataBarLimited" class="gs1-pattern-select" onchange="applyGS1Pattern()" style="width: 100%; max-width: 600px; padding: 8px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 0.9em; display: none;">
+                            <option value="">GS1 DataBar 限定型 サンプルコード...</option>
+                            <option value="0123456789012">先頭0例1: 01234567890128 (13桁)</option>
+                            <option value="0491234567890">先頭0例2: 04912345678904 (13桁)</option>
+                            <option value="1012345678901">先頭1例1: 10123456789012 (13桁)</option>
+                            <option value="1490123456789">先頭1例2: 14901234567897 (13桁)</option>
+                            <option value="123456789012">短縮例1: 123456789012 (12桁→ゼロパディング後01234567890120)</option>
+                            <option value="1234567890">短縮例2: 1234567890 (10桁→ゼロパディング後0001234567890)</option>
+                        </select>
+                        
+                        <!-- GS1-DataBar拡張型専用 -->
+                        <select id="gs1PatternSelect_GS1DataBarExpanded" class="gs1-pattern-select" onchange="applyGS1Pattern()" style="width: 100%; max-width: 600px; padding: 8px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 0.9em; display: none;">
+                            <option value="">GS1 DataBar 拡張型 データパターン入力補助...</option>
+                            <optgroup label="基本パターン（{AI}使用）">
+                                <option value="0100012345678905{AI}10ABC123">(01)商品識別 + {AI}(10)バッチ: (01)00012345678905(10)ABC123</option>
+                                <option value="0100012345678905{AI}21SERIAL123">(01)商品識別 + {AI}(21)シリアル: (01)00012345678905(21)SERIAL123</option>
+                                <option value="123{AI}17ABCDEFGH">AIなし or 任意AI（非01）: 123(17)ABCDEFGH</option>
+                            </optgroup>
+                            <optgroup label="計量商品">
+                                <option value="0190012345678908{AI}3103001750">(01) + (3103)重量kg: (01)90012345678908(3103)001750</option>
+                                <option value="0190012345678908{AI}3202000156">(01) + (3202)重量lb: (01)90012345678908(3202)000156</option>
+                            </optgroup>
+                        </select>
+
+                        <!-- 郵便カスタマバーコード専用 -->
+                        <select id="gs1PatternSelect_YubinCustomer" class="gs1-pattern-select" onchange="applyGS1Pattern()" style="width: 100%; max-width: 600px; padding: 8px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 0.9em; display: none;">
+                            <option value="">郵便カスタマバーコード サンプルコード...</option>
+                            <optgroup label="郵便番号+住所表示番号">
+                                <option value="27500263-29-2-401">例1: 275-0026 + 3-29-2-401</option>
+                                <option value="1638001-2-10-10-204">例2: 163-8001 + 2-10-10-204（新宿区役所）</option>
+                                <option value="1050011-1-1">例3: 105-0011 + 1-1（芝公園）</option>
+                                <option value="6000000">例4: 600-0000（郵便番号のみ）</option>
+                            </optgroup>
+                            <optgroup label="フォーマット説明">
+                                <option value="" disabled>郵便番号7桁 + ハイフン + 住所表示番号</option>
+                                <option value="" disabled>住所表示番号: 町域名-丁目-番地-号-建物番号</option>
+                            </optgroup>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- DataBar14 タイプ選択（GS1DataBar14選択時のみ表示） -->
+                <div class="form-row single" id="grp_typeDatabar14" style="display: none;">
+                    <div class="form-group">
+                        <label for="typeDatabar14">DataBar 標準型 タイプ</label>
+                        <select id="typeDatabar14">
+                            <option value="OMNIDIRECTIONAL">標準型 Omni-directional</option>
+                            <option value="STACKED">二層型 Stacked</option>
+                            <option value="STACKED_OMNIDIRECTIONAL">標準二層型 Stacked Omni-directional</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- DataBarExpanded タイプ選択（GS1DataBarExpanded選択時のみ表示） -->
+                <div class="form-row single" id="grp_typeDatabarExpanded" style="display: none;">
+                    <div class="form-group">
+                        <label for="typeDatabarExpanded">DataBar 拡張型 タイプ</label>
+                        <select id="typeDatabarExpanded">
+                            <option value="UNSTACKED">一層型 UnStacked</option>
+                            <option value="STACKED">多層型 Stacked</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 位置・サイズ設定（コンパクト1行） -->
+                <div class="form-section">
+                    <div class="compact-row">
+                        <div class="compact-item">
+                            <label for="x1d">X座標</label>
+                            <input type="number" id="x1d" value="20" min="0" max="1000">
+                        </div>
+                        <div class="compact-item">
+                            <label for="y1d">Y座標</label>
+                            <input type="number" id="y1d" value="20" min="0" max="1000">
+                        </div>
+                        <div class="compact-item" id="grp_width1d">
+                            <label for="width1d">幅</label>
+                            <input type="number" id="width1d" value="400" min="100" max="2000" class="wide">
+                        </div>
+                        <div class="compact-item" id="grp_height1d">
+                            <label for="height1d">高さ</label>
+                            <input type="number" id="height1d" value="150" min="50" max="500">
+                        </div>
+                        <div class="compact-checkbox" id="grp_fitWidth1d">
+                            <input type="checkbox" id="fitWidth1d" checked>
+                            <label for="fitWidth1d">幅ぴったり</label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 色・ピクセル調整（コンパクト1行） -->
+                <div class="form-section">
+                    <div class="compact-row">
+                        <div class="compact-item">
+                            <label for="foreColor1d">前景色</label>
+                            <div class="color-input-group">
+                                <input type="color" id="foreColor1d" value="#000000">
+                                <input type="text" id="foreColorText1d" value="#000000" readonly>
+                            </div>
+                        </div>
+                        <div class="compact-item">
+                            <label for="backColor1d">背景色</label>
+                            <div class="color-input-group">
+                                <input type="color" id="backColor1d" value="#ffffff">
+                                <input type="text" id="backColorText1d" value="#ffffff" readonly>
+                            </div>
+                        </div>
+                        <div class="compact-item">
+                            <label for="pxAdjustBlack1d">黒バー調整</label>
+                            <input type="number" id="pxAdjustBlack1d" value="0" min="-10" max="10">
+                        </div>
+                        <div class="compact-item">
+                            <label for="pxAdjustWhite1d">白調整</label>
+                            <input type="number" id="pxAdjustWhite1d" value="0" min="-10" max="10">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- テキスト設定（コンパクト1行） -->
+                <div class="form-section" id="grp_checkboxes1d">
+                    <div class="compact-row" id="grp_textSettings1d">
+                        <div class="compact-checkbox" id="grp_showText1d">
+                            <input type="checkbox" id="showText1d" checked>
+                            <label for="showText1d">テキスト表示</label>
+                        </div>
+                        <div class="compact-item" id="grp_textFontScale1d">
+                            <label for="textFontScale1d">サイズ倍率</label>
+                            <input type="number" id="textFontScale1d" value="1.0" min="0.5" max="3.0" step="0.1">
+                        </div>
+                        <div class="compact-item" id="grp_textGap1d">
+                            <label for="textGap1d">隙間</label>
+                            <input type="number" id="textGap1d" value="1.0" min="0.0" max="3.0" step="0.1">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 固有プロパティ -->
+            <div id="specificProps1d" class="specific-props" style="display: none;">
+                <h3 id="specificPropsTitle1d">固有プロパティ</h3>
+                <div id="specificPropsContent1d" class="form-grid"></div>
+            </div>
+
+            <!-- 生成ボタン＋出力先選択＋回転 -->
+            <div class="generate-row">
+                <button class="generate-btn" onclick="generate1D()">1次元バーコード生成</button>
+                <div class="output-mode-selector">
+                    <span class="output-mode-label">出力先:</span>
+                    <label class="output-mode-option">
+                        <input type="radio" name="outputMode1d" value="browser" checked>
+                        <span>ブラウザ</span>
+                    </label>
+                    <label class="output-mode-option">
+                        <input type="radio" name="outputMode1d" value="pdf">
+                        <span>PDF</span>
+                    </label>
+                </div>
+                <div class="rotate-select">
+                    <label for="rotateAngle1d">🔄 回転:</label>
+                    <select id="rotateAngle1d">
+                        <option value="0">0°</option>
+                        <option value="90">90°</option>
+                        <option value="180">180°</option>
+                        <option value="270">270°</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== 2次元バーコード ========== -->
+        <div id="2d-content" class="main-tab-content">
+            <div class="form-grid">
+                <!-- バーコード種類 -->
+                <div class="form-group">
+                    <label for="barcode2dType">バーコード種類 *</label>
+                    <select id="barcode2dType" onchange="update2DProps()">
+                        <option value="QR">QRコード</option>
+                        <option value="DataMatrix">DataMatrix</option>
+                        <option value="PDF417">PDF417</option>
+                    </select>
+                </div>
+
+                <!-- バーコードデータ -->
+                <div class="form-group">
+                    <label for="data2d">バーコードデータ *</label>
+                    <!-- ヒント表示エリア（バーコード種別に応じて動的に更新） -->
+                    <div id="barcodeHint2d" style="font-size: 0.85em; color: #666; margin-bottom: 5px; padding: 8px 12px; background: #f0f8ff; border-left: 4px solid #4a90e2; border-radius: 4px;">
+                        QRコード: 数字、英数字、漢字、バイナリデータに対応
+                    </div>
+                    <input type="text" id="data2d" placeholder="例: https://example.com" value="HELLO WORLD 日本語">
+                </div>
+
+                <!-- GS1-DataMatrix専用入力補助 -->
+                <div id="gs1AssistUI_2D" class="control-char-ui" style="display: none;">
+                    <div style="display: flex; justify-content: flex-end; align-items: center;">
+                        <select id="gs1PatternSelect_DataMatrix" class="gs1-pattern-select" onchange="applyGS1Pattern2D()" style="width: 100%; max-width: 600px; padding: 8px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 0.9em;">
+                            <option value="">GS1-DataMatrix データパターン入力補助...</option>
+                            <optgroup label="基本パターン">
+                                <option value="{FNC1}0100012345678905{FNC1}10ABC123">{FNC1}(01)商品識別 + {FNC1}(10)バッチ: (01)00012345678905(10)ABC123</option>
+                                <option value="{FNC1}0100012345678905{FNC1}17251231">{FNC1}(01)商品識別 + {FNC1}(17)有効期限: (01)00012345678905(17)251231</option>
+                                <option value="{FNC1}0100012345678905{FNC1}21SERIAL123">{FNC1}(01)商品識別 + {FNC1}(21)シリアル: (01)00012345678905(21)SERIAL123</option>
+                                <option value="{FNC1}01000123456789051511250031001234">{FNC1}(01)商品識別 + (15)期限 + (30)数量: (01)00012345678905(15)112500(30)001234</option>
+                            </optgroup>
+                            <optgroup label="計量商品（重量・価格）">
+                                <option value="{FNC1}01900123456789083103001750">{FNC1}(01) + (3103)重量kg(0.001): (01)90012345678908(3103)001750</option>
+                                <option value="{FNC1}01900123456789083202000156">{FNC1}(01) + (3202)重量lb(0.01): (01)90012345678908(3202)000156</option>
+                                <option value="{FNC1}01900123456789083203022767">{FNC1}(01) + (3203)重量lb(0.001): (01)90012345678908(3203)022767</option>
+                                <option value="{FNC1}0190012345678908392207950">{FNC1}(01) + (3922)価格: (01)90012345678908(3922)07950</option>
+                            </optgroup>
+                            <optgroup label="計量商品+日付">
+                                <option value="{FNC1}0190012345678908310301223311991231">{FNC1}(01) + (3103)重量 + (11)製造年月日</option>
+                                <option value="{FNC1}0190012345678908310301223313991231">{FNC1}(01) + (3103)重量 + (13)包装年月日</option>
+                                <option value="{FNC1}0190012345678908310301223315991231">{FNC1}(01) + (3103)重量 + (15)品質保持期限</option>
+                                <option value="{FNC1}0190012345678908310301223317991231">{FNC1}(01) + (3103)重量 + (17)有効期限</option>
+                            </optgroup>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 位置・サイズ設定（コンパクト1行） -->
+                <div class="form-section">
+                    <div class="compact-row">
+                        <div class="compact-item">
+                            <label for="x2d">X座標</label>
+                            <input type="number" id="x2d" value="20" min="0" max="1000">
+                        </div>
+                        <div class="compact-item">
+                            <label for="y2d">Y座標</label>
+                            <input type="number" id="y2d" value="20" min="0" max="1000">
+                        </div>
+                        <div class="compact-item">
+                            <label for="size2d">サイズ</label>
+                            <input type="number" id="size2d" value="300" min="100" max="1000" class="wide">
+                        </div>
+                        <div class="compact-checkbox" id="grp_fitWidth2d">
+                            <input type="checkbox" id="fitWidth2d" checked>
+                            <label for="fitWidth2d">幅ぴったり</label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 色設定（コンパクト1行） -->
+                <div class="form-section">
+                    <div class="compact-row">
+                        <div class="compact-item">
+                            <label for="foreColor2d">前景色</label>
+                            <div class="color-input-group">
+                                <input type="color" id="foreColor2d" value="#000000">
+                                <input type="text" id="foreColorText2d" value="#000000" readonly>
+                            </div>
+                        </div>
+                        <div class="compact-item">
+                            <label for="backColor2d">背景色</label>
+                            <div class="color-input-group">
+                                <input type="color" id="backColor2d" value="#ffffff">
+                                <input type="text" id="backColorText2d" value="#ffffff" readonly>
+                            </div>
+                        </div>
+                        <div class="compact-item">
+                            <label for="encoding2d">文字コード</label>
+                            <select id="encoding2d" style="padding: 6px 8px; font-size: 0.9em;">
+                                <option value="utf-8">UTF-8</option>
+                                <option value="shift-jis">Shift-JIS</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 固有プロパティ -->
+            <div id="specificProps2d" class="specific-props">
+                <h3>固有プロパティ</h3>
+                <div id="specificPropsContent2d" class="form-grid"></div>
+            </div>
+
+            <!-- 生成ボタン＋出力先選択＋回転 -->
+            <div class="generate-row">
+                <button class="generate-btn" onclick="generate2D()">2次元バーコード生成</button>
+                <div class="output-mode-selector">
+                    <span class="output-mode-label">出力先:</span>
+                    <label class="output-mode-option">
+                        <input type="radio" name="outputMode2d" value="browser" checked>
+                        <span>ブラウザ</span>
+                    </label>
+                    <label class="output-mode-option">
+                        <input type="radio" name="outputMode2d" value="pdf">
+                        <span>PDF</span>
+                    </label>
+                </div>
+                <div class="rotate-select">
+                    <label for="rotateAngle2d">🔄 回転:</label>
+                    <select id="rotateAngle2d">
+                        <option value="0">0°</option>
+                        <option value="90">90°</option>
+                        <option value="180">180°</option>
+                        <option value="270">270°</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== 特殊バーコード ========== -->
+        <div id="special-content" class="main-tab-content">
+            <div class="form-grid">
+                <!-- 行1: バーコード種類 -->
+                <div class="form-row single">
+                    <div class="form-group">
+                        <label for="barcodeSpecialType">バーコード種類 *</label>
+                        <select id="barcodeSpecialType" onchange="updateSpecialProps()">
+                            <option value="ConvenienceStore">コンビニ標準料金代理収納用バーコード</option>
+                            <option value="YubinCustomer">郵便カスタマバーコード</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 行2: ヒント + データ入力 -->
+                <div class="form-row full-width">
+                    <div class="form-group">
+                        <label for="dataSpecial">バーコードデータ *</label>
+                        <div id="specialBarcodeHint" style="font-size: 0.85em; color: #666; margin-bottom: 5px; padding: 8px 12px; background: #f0f8ff; border-left: 4px solid #4a90e2; border-radius: 4px;">
+                            コンビニ標準料金代理収納用バーコード: GS1-128形式。先頭に{FNC1}が必要。
+                        </div>
+                        <input type="text" id="dataSpecial" placeholder="例: {FNC1}9191234500000000000000452087500401310029500" value="{FNC1}9191234500000000000000452087500401310029500">
+                    </div>
+                </div>
+
+                <!-- サンプルコード選択UI -->
+                <div class="form-row full-width" id="gs1AssistUI_Special">
+                    <div class="form-group">
+                        <label>📋 サンプルコード選択</label>
+                        
+                        <!-- コンビニバーコード用 -->
+                        <select id="gs1PatternSelect_ConvenienceStore_Special" class="gs1-pattern-select" onchange="applyGS1PatternSpecial()" style="width: 100%; max-width: 600px; padding: 8px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 0.9em;">
+                            <option value="">コンビニバーコード サンプルコード...</option>
+                            <optgroup label="料金収納（91: 標準料金代理収納）">
+                                <option value="{FNC1}9191234500000000000000452087500401310029500">電気料金例</option>
+                                <option value="{FNC1}9100000000000000000000100000000000000000001">最小例</option>
+                            </optgroup>
+                        </select>
+
+                        <!-- 郵便カスタマ用 -->
+                        <select id="gs1PatternSelect_YubinCustomer_Special" class="gs1-pattern-select" onchange="applyGS1PatternSpecial()" style="width: 100%; max-width: 600px; padding: 8px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 0.9em; display: none;">
+                            <option value="">郵便カスタマバーコード サンプルコード...</option>
+                            <optgroup label="郵便番号+住所表示番号">
+                                <option value="27500263-29-2-401">例1: 275-0026 + 3-29-2-401</option>
+                                <option value="1638001-2-10-10-204">例2: 163-8001 + 2-10-10-204</option>
+                                <option value="1050011-1-1">例3: 105-0011 + 1-1</option>
+                                <option value="6000000">例4: 600-0000（郵便番号のみ）</option>
+                            </optgroup>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 位置・サイズ設定（コンパクト1行） -->
+                <div class="form-section">
+                    <div class="compact-row">
+                        <div class="compact-item">
+                            <label for="xSpecial">X座標</label>
+                            <input type="number" id="xSpecial" value="20" min="0" max="1000">
+                        </div>
+                        <div class="compact-item">
+                            <label for="ySpecial">Y座標</label>
+                            <input type="number" id="ySpecial" value="20" min="0" max="1000">
+                        </div>
+                        <div class="compact-item" id="grp_widthSpecial">
+                            <label for="widthSpecial">幅</label>
+                            <input type="number" id="widthSpecial" value="500" min="100" max="2000" class="wide">
+                        </div>
+                        <div class="compact-item">
+                            <label for="heightSpecial">高さ</label>
+                            <input type="number" id="heightSpecial" value="30" min="20" max="500">
+                        </div>
+                        <div class="compact-checkbox" id="grp_fitWidthSpecial">
+                            <input type="checkbox" id="fitWidthSpecial" checked>
+                            <label for="fitWidthSpecial">幅ぴったり</label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 色・ピクセル調整設定（コンパクト1行） -->
+                <div class="form-section">
+                    <div class="compact-row">
+                        <div class="compact-item">
+                            <label for="foreColorSpecial">前景色</label>
+                            <div class="color-input-group">
+                                <input type="color" id="foreColorSpecial" value="#000000">
+                                <input type="text" id="foreColorTextSpecial" value="#000000" readonly>
+                            </div>
+                        </div>
+                        <div class="compact-item">
+                            <label for="backColorSpecial">背景色</label>
+                            <div class="color-input-group">
+                                <input type="color" id="backColorSpecial" value="#ffffff">
+                                <input type="text" id="backColorTextSpecial" value="#ffffff" readonly>
+                            </div>
+                        </div>
+                        <div class="compact-item">
+                            <label for="pxAdjustBlackSpecial">黒バー調整</label>
+                            <input type="number" id="pxAdjustBlackSpecial" value="0" min="-5" max="5">
+                        </div>
+                        <div class="compact-item">
+                            <label for="pxAdjustWhiteSpecial">白調整</label>
+                            <input type="number" id="pxAdjustWhiteSpecial" value="0" min="-5" max="5">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 生成ボタン＋出力先選択＋回転 -->
+            <div class="generate-row">
+                <button class="generate-btn" onclick="generateSpecial()">特殊バーコード生成</button>
+                <div class="output-mode-selector">
+                    <span class="output-mode-label">出力先:</span>
+                    <label class="output-mode-option">
+                        <input type="radio" name="outputModeSpecial" value="browser" checked>
+                        <span>ブラウザ</span>
+                    </label>
+                    <label class="output-mode-option">
+                        <input type="radio" name="outputModeSpecial" value="pdf">
+                        <span>PDF</span>
+                    </label>
+                </div>
+                <div class="rotate-select">
+                    <label for="rotateAngleSpecial">🔄 回転:</label>
+                    <select id="rotateAngleSpecial">
+                        <option value="0">0°</option>
+                        <option value="90">90°</option>
+                        <option value="180">180°</option>
+                        <option value="270">270°</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- 結果表示エリア -->
+        <div id="result">
+            <p style="color: #999;">バーコードがここに表示されます</p>
+        </div>
+
+        <!-- ログ表示エリア -->
+        <div id="debugLog" style="margin-top: 30px; padding: 20px; background: #f0f0f0; border-radius: 8px; max-height: 400px; overflow-y: auto; font-family: monospace; font-size: 12px; display: none;">
+            <h3 style="margin-bottom: 10px;">🔍 デバッグログ</h3>
+            <div id="logContent"></div>
+        </div>
+
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
